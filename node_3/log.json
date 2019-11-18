@@ -1,0 +1,17 @@
+[
+    {
+        "type": "client_append_entries",
+        "timestamp": 1574084884,
+        "term": 1
+    },
+    {
+        "type": "client_append_entries",
+        "timestamp": 1574084894,
+        "term": 1
+    },
+    {
+        "type": "client_append_entries",
+        "timestamp": 1574084904,
+        "term": 1
+    }
+]
