@@ -95,6 +95,30 @@ class Node(object):
         msg, addr = self.ss.recvfrom(65535)
         return json.loads(msg), addr
 
+    def redirect(self, data, addr):
+        if data == None:
+            return None
+
+        if data['type'] == 'client_append_entries':
+            if self.role != 'leader':
+                if self.leader_id:
+                    logging.info('redirect: client_append_entries to leader')
+                    self.send(data, self.peers[self.leader_id])
+                return None
+            else:
+                self.client_addr = addr
+                return data
+
+        if data['dst_id'] != self.id:
+            logging.info('redirect: to ' + data['dst_id'])
+            # logging.info('redirec to leader')
+            self.send(data, self.peers[data['dst_id']])
+            return None
+        else:
+            return data
+
+        return data
+
     def append_entries(self, data):
         '''
         append entries rpc
@@ -280,7 +304,8 @@ class Node(object):
         rules for fervers: candidate
         '''
         logging.info('-------------------------------candidate------------------------------------')
-
+        
+        t = time.time()
         # candidate rules: rule 1
         for dst_id in self.peers:
             if self.vote_ids[dst_id] == 0:
@@ -330,7 +355,6 @@ class Node(object):
                 return
 
         # candidate rules: rule 4
-        t = time.time()
         if t > self.next_leader_election_time:
             logging.info('candidate: 1. leader_election timeout')
             logging.info('           2. become candidate')
@@ -413,34 +437,8 @@ class Node(object):
                     break
             else:
                 logging.info('leader：2. commit = ' + str(self.commit_index))
-
-                
                 break
 
-        
-    def redirect(self, data, addr):
-        if data == None:
-            return None
-
-        if data['type'] == 'client_append_entries':
-            if self.role != 'leader':
-                if self.leader_id:
-                    logging.info('redirect: client_append_entries to leader')
-                    self.send(data, self.peers[self.leader_id])
-                return None
-            else:
-                self.client_addr = addr
-                return data
-
-        if data['dst_id'] != self.id:
-            logging.info('redirect: to ' + data['dst_id'])
-            # logging.info('redirec to leader')
-            self.send(data, self.peers[data['dst_id']])
-            return None
-        else:
-            return data
-
-        return data
 
     def run(self):
         while True:
