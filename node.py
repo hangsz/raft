@@ -31,7 +31,7 @@ class Node(object):
         if not os.path.exists(self.id):
             os.mkdir(self.id)
 
-        # 初始化 persistent state
+        # init persistent state
         self.load()
         self.log = Log(self.id)
 
@@ -129,7 +129,7 @@ class Node(object):
         
         tmp_prev_log_term = self.log.get_log_term(prev_log_index)
 
-        # append_entries: rule 2, 3(index 主索引, index也唯一递增)
+        # append_entries: rule 2, 3
         # append_entries: rule 3
         if tmp_prev_log_term != prev_log_term:
             logging.info('          4. success = False: index not match or term not match')
@@ -142,7 +142,6 @@ class Node(object):
             self.log.delete_entries(prev_log_index)
 
         # append_entries rule 4
-        # 注意可能存在重叠，也即leader发来的prev可能是比较早的
         else:
             logging.info('          4. success = True')
             logging.info('          5. send append_entries_response to leader ' + data['src_id'])
@@ -299,7 +298,6 @@ class Node(object):
 
                 self.send(request, self.peers[dst_id])
 
-        # 只处理当前任期消息
         if data != None and data['term'] < self.current_term:
             logging.info('candidate: 1. smaller term from ' + data['src_id'])
             logging.info('           2. ignore')
