@@ -214,14 +214,14 @@ class Node(object):
 
         if self.voted_for == None or self.voted_for == candidate_id:
             if last_log_index >= self.log.last_log_index and last_log_term >= self.log.last_log_term:
-                self.vote_for = data['src_id']
+                self.voted_for = data['src_id']
                 self.save() 
                 response['vote_granted'] = True
                 self.send(response, self.peers[data['src_id']])
                 logging.info('          3. success = True: candidate log is newer')
                 logging.info('          4. send request_vote_response to candidate ' + data['src_id'])
             else:
-                self.vote_for = None
+                self.voted_for = None
                 self.save()
                 response['vote_granted'] = False
                 self.send(response, self.peers[data['src_id']])
@@ -322,11 +322,11 @@ class Node(object):
                 # logging.info(request)
 
                 self.send(request, self.peers[dst_id])
-
-        if data != None and data['term'] < self.current_term:
-            logging.info('candidate: 1. smaller term from ' + data['src_id'])
-            logging.info('           2. ignore')
-            return
+        
+        # if data != None and data['term'] < self.current_term:
+        #     logging.info('candidate: 1. smaller term from ' + data['src_id'])
+        #     logging.info('           2. ignore')
+            # return
 
         if data != None and data['term'] == self.current_term:
             # candidate rules: rule 2
@@ -339,6 +339,8 @@ class Node(object):
                 if vote_count >= len(self.peers)//2:
                     logging.info('           2. become leader')
                     self.role = 'leader'
+                    self.voted_for = None
+                    self.save()
                     self.next_heartbeat_time = 0
                     self.next_index = {_id: self.log.last_log_index + 1 for _id in self.peers}
                     self.match_index = {_id: 0 for _id in self.peers}
