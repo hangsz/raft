@@ -2,6 +2,8 @@
 
 Raft算法的python实现。
 
+Raft官网：https://raft.github.io/
+
 ## 运行
 
 1. node.py, log.py 为核心代码。
