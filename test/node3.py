@@ -3,7 +3,10 @@
 __author__ = 'zhenhang.sun@gmail.com'
 __version__ = '1.0.0'
 
-from node import Node
+import sys
+sys.path.append("..")
+
+from raft.node import Node
 
 if __name__ == '__main__':
     

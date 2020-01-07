@@ -10,7 +10,7 @@ import socket
 import random
 import logging
 
-from log import Log
+from .log import Log
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
