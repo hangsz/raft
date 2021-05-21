@@ -5,19 +5,20 @@ __version__ = '1.0.0'
 
 import sys
 sys.path.append("..")
+
 from raft.node import Node
 
 if __name__ == '__main__':
 
-    conf = {
+    meta = {   
               'group_id': '1',
-              'id': '1',
+              'id': '0',
               'addr': ('localhost', 10001),
-              'peers': { '2': ('localhost', 10002), 
-                         '3': ('localhost', 10003)
+              'peers': { '1': ('localhost', 10002), 
+                         '2': ('localhost', 10003)
                        }
-            }
-     
-    node = Node(conf)
+    }
+
+    node = Node(meta)
 
     node.run()

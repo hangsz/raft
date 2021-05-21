@@ -5,6 +5,7 @@ __version__ = '1.0.0'
 
 import os
 import json
+from .config import config
 
 class Log(object):
 

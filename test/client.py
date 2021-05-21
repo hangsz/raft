@@ -10,6 +10,8 @@ import random
 
 from multiprocessing import Process
 
+from raft.rpc import Rpc
+
 def send():
     cs = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     servers = [

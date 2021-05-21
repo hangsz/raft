@@ -9,10 +9,12 @@ from raft.node import Node
 
 if __name__ == '__main__':
 
-    conf = {'id': 'node_2',
+    conf = {
+              'group_id': '1',
+              'id': '2',
               'addr': ('localhost', 10002),
-              'peers': { 'node_1': ('localhost', 10001), 
-                         'node_3': ('localhost', 10003)
+              'peers': { '1': ('localhost', 10001), 
+                         '3': ('localhost', 10003)
                        }
             }
      
