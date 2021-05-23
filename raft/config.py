@@ -1,6 +1,3 @@
-__author__ = 'zhenhang.sun@gmail.com'
-__version__ = '1.0.0'
-
 class Config(object):
     ip = "localhost"
     mport = 9998 # master port

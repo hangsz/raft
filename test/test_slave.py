@@ -1,8 +1,3 @@
-# coding: utf-8
-
-__author__ = "zhenhang.sun@gmail.com"
-__version__ = "1.0.0"
-
 import os
 import sys
 
@@ -46,7 +41,6 @@ if __name__ == "__main__":
         },
     ]
 
-
     # create node
     # for meta in metas:
     #     data = {
@@ -55,19 +49,7 @@ if __name__ == "__main__":
     #     }
     #     rpc_endpoint.send(data, (conf.ip, conf.cport))
 
-
     # kill node
     for meta in metas:
-        data = {
-            'type': 'kill_node',
-            'meta': meta
-        }
+        data = {"type": "kill_node", "meta": meta}
         rpc_endpoint.send(data, (conf.ip, conf.cport))
-
-
-
-
-    
-
-
-

@@ -54,7 +54,6 @@ class Master(object):
         """
         select servers according to the server stats
         """
-        # return list(self.server_stats.keys())[:num]
         return ["localhost"] * num
 
     def save_group_meta(self, meta):
@@ -63,7 +62,7 @@ class Master(object):
             json.dump(meta, f, indent=4)
 
     def create_group(self, meta):
-        meta['group_id'] = str(uuid.uuid4())
+        meta["group_id"] = str(uuid.uuid4())
 
         num = meta["num"]
         servers = self.select_servers(num)
@@ -71,20 +70,17 @@ class Master(object):
 
         self.save_group_meta(meta)
         self.port_used += num
-        
+
         group = Group(meta)
 
         logger.info(group.all_node_meta)
         for node_meta in group.all_node_meta:
-            data = {
-                'type':"create_node",
-                "meta": node_meta
-            }
+            data = {"type": "create_node", "meta": node_meta}
             self.rpc_endpoint.send(data, (node_meta["addr"][0], self.conf.sport))
 
     def get_group(self, addr):
-        filename =  self.path + random.choice(os.listdir(self.path))
-        with open(filename, 'r') as f:
+        filename = self.path + random.choice(os.listdir(self.path))
+        with open(filename, "r") as f:
             meta = json.load(f)
 
         self.rpc_endpoint.send(meta, addr)
@@ -114,7 +110,6 @@ class Master(object):
                 logger.info(e)
 
         self.rpc_endpoint.close()
-
 
 
 if __name__ == "__main__":

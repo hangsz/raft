@@ -7,8 +7,10 @@ from .node import Node
 from .config import config
 from .rpc import Rpc
 
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d]\n%(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d]\n%(message)s",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +31,7 @@ class Slave(object):
 
     def load_conf(self):
         env = os.environ.get("env")
-        conf = config[env] if env else config['DEV']
+        conf = config[env] if env else config["DEV"]
         return conf
 
     def restart_raft_node(self):
@@ -37,7 +39,7 @@ class Slave(object):
             return
 
         for file in os.listdir(self.path):
-            with open(file, 'r') as f:
+            with open(file, "r") as f:
                 node_conf = json.load(f)
 
             self.start_raft_node(node_conf)
@@ -50,12 +52,12 @@ class Slave(object):
         node.run()
 
     def kill_node(self, meta):
-        p = self.childrens.pop((meta['group_id'], meta['id']))
+        p = self.childrens.pop((meta["group_id"], meta["id"]))
         p.terminate()
-        
+
     def save_node_meta(self, meta):
-        filename = self.path + meta['group_id'] + "_" + meta['id'] + '.json'
-        with open(filename, 'w') as f:
+        filename = self.path + meta["group_id"] + "_" + meta["id"] + ".json"
+        with open(filename, "w") as f:
             json.dump(meta, f, indent=4)
 
     def run(self):
@@ -64,22 +66,22 @@ class Slave(object):
         while True:
             data, addr = self.rpc_endpoint.recv()
             try:
-                if data['type'] == "create_node":
+                if data["type"] == "create_node":
                     logger.info("create node")
 
-                    meta = data['meta']
+                    meta = data["meta"]
                     logger.info(meta)
                     self.save_node_meta(meta)
-                    p = Process(target=self.create_node, args=(meta, ), daemon=True)
+                    p = Process(target=self.create_node, args=(meta,), daemon=True)
                     p.start()
-                    self.childrens[(meta['group_id'], meta['id'])] = p.pid
+                    self.childrens[(meta["group_id"], meta["id"])] = p.pid
 
-                elif  data['type'] == "kill_node":
+                elif data["type"] == "kill_node":
                     logger.info("create node")
-                    meta = data['meta']
+                    meta = data["meta"]
                     self.stop(meta)
 
-                elif data['type'] == "create_node_success":
+                elif data["type"] == "create_node_success":
                     logger.info("create node success")
 
             except Exception as e:
