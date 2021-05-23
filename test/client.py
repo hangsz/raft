@@ -3,31 +3,39 @@
 __author__ = 'zhenhang.sun@gmail.com'
 __version__ = '1.0.0'
 
+import os
 import time 
 import json
 import socket
 import random
+import logging
+
+import sys
+sys.path.append("..")
 
 from multiprocessing import Process
-
+from raft.config import config
 from raft.rpc import Rpc
 
-def send():
-    cs = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    servers = [
-                ('localhost', 10001),
-                ('localhost', 10002), 
-                ('localhost', 10003)
-            ]
+
+
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d]\n%(message)s')
+logger = logging.getLogger(__name__)
+
+def send(meta):
+
+    rpc_endpoint = Rpc()
     
     while True:
-            addr = random.choice(servers)
+            addr = random.choice(meta['nodes'])
             
             data = {'type': 'client_append_entries', 'timestamp': int(time.time())}
             print('send: ', data)
 
             data = json.dumps(data).encode('utf-8')
-            cs.sendto(data, addr)
+            rpc_endpoint.send(data, addr)
 
             time.sleep(10)
 
@@ -45,12 +53,31 @@ def recv():
 
 
 if __name__ == '__main__':
+    env = os.environ.get("env")
+    conf = config[env] if env else config["DEV"]
+
+    rpc_endpoint = Rpc((conf.ip, conf.cport))
+
+ 
+    data = {'type':"get_group"}
+
+    rpc_endpoint.send(data, (conf.ip, conf.mport))
+    group_meta, _ = rpc_endpoint.recv()
+    print(group_meta)
     
-    p1 = Process(target=send, name='send', daemon=True)
-    p1.start()
-    p2 = Process(target=recv, name='recv', daemon=True)
-    p2.start()
+
+    while True:
+        try:
+            res, _ =  rpc_endpoint.recv(timeout=2)
+            print("recv: commit success", res)
+        except Exception as e:
+            pass
+        addr = random.choice(group_meta['nodes'])
+        data = {'type': 'client_append_entries', 'timestamp': int(time.time())}
+        print('send: ', data)
+
+        rpc_endpoint.send(data, addr)
+
+        time.sleep(10)
 
 
-    p1.join()
-    p2.join()

@@ -7,12 +7,25 @@ Raft官网：https://raft.github.io/
 
 ## raft
 - node.py, log.py为核心代码。
-- node.py实现raft的节点消息收发、角色转换等功能。
-- log.py实现具体的日志存储。
+- node.py 实现raft的节点消息收发、角色转换等功能
+- log.py 实现具体的日志存储
+- rpc.py 实现具体消息编码和转发
+- master.py 控制面中心节点，进行group创建和管理
+- slave.py 每个server上部署的控制面节点
 
 ## test
-1. 进入test目录。
-2. node1.py, node2.py, node3.py为三个节点，可以直接 python 运行。
-3. client.py文件为客户端向raft节点发送数据，可以直接 python 运行。
-4. 会自动生成node1, node2, node3目录存储数据。
-5. 可以用compare 软件进行文件一致性比较。
+windows系统 单机 测试
+
+### 测试步骤
+1. 运行 python -m raft.master
+2. 运行 python -m raft.slave
+3. 进入test目录, 运行python test_master.py, 启动一个raft group
+4. 进入test目录, 运行client.py, 写入log
+
+## 结果说明
+- data/master, master存储的数据
+- data/slvae, slave存储的数据
+- data/node 
+    - .log 各node交互过程监控数据，可以在git bash中用tail -f filename.log查看
+    - persistent.json, node持久化数据
+    - log.json, 存储的日志

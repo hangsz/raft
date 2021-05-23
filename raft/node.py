@@ -15,9 +15,10 @@ from .rpc import Rpc
 from .config import config
 
 
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d]\n%(message)s')
+# logging.basicConfig(level=logging.INFO,
+#                     format='%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s')
 logger = logging.getLogger(__name__)
+logger.propagate = False
 
 env = os.environ.get("env")
 conf = config[env] if env else config['DEV']
@@ -45,7 +46,9 @@ class Node(object):
 
         # init persistent state
         self.load()
-        self.log = Log(self.id)
+        
+        logname = self.path+self.group_id + '_' + self.id + "_log.json"
+        self.log = Log(logname)
 
         # volatile state
         # rule 1, 2
@@ -73,7 +76,13 @@ class Node(object):
 
   
         # rpc
-        self.rpc_endpoint = Rpc(self.addr)
+        self.rpc_endpoint = Rpc(self.addr, timeout=2)
+
+        # log
+        fmt = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s')
+        handler = logging.FileHandler(self.path + self.group_id + '_' + self.id + '.log', 'a')
+        handler.setFormatter(fmt)
+        logger.addHandler(handler)
 
     def load(self):
         filename = self.path + self.group_id + "_" + self.id + '_persistent.json'
@@ -107,7 +116,8 @@ class Node(object):
                     self.rpc_endpoint.send(data, self.peers[self.leader_id])
                 return None
             else:
-                self.client_addr = addr
+                self.client_addr = (addr[0], conf.cport)
+                # logger.info("client addr " + self.client_addr[0] +'_' +str(self.client_addr[1]))
                 return data
 
         if data['dst_id'] != self.id:
@@ -146,7 +156,7 @@ class Node(object):
 
         # heartbeat
         if data['entries'] == []:
-            logger.info('          4. heartbeat')
+            logger.info('       4. heartbeat')
             return
 
         prev_log_index = data['prev_log_index']
@@ -435,7 +445,7 @@ class Node(object):
 
                     if self.client_addr:
                         response = {'index': self.commit_index}
-                        self.rpc_endpoint.send(response, (self.client_addr[0],10000))
+                        self.rpc_endpoint.send(response, self.client_addr)
 
                     break
             else:
@@ -445,27 +455,26 @@ class Node(object):
 
     def run(self):
 
-        data = {
-            "type": "create_node_success",
-            "group_id": self.group_id,
-            "id": self.id
-        }
-        self.rpc_endpoint.send(data, (conf.ip, conf.cport))
+        # data = {
+        #     "type": "create_node_success",
+        #     "group_id": self.group_id,
+        #     "id": self.id
+        # }
+        # self.rpc_endpoint.send(data, (conf.ip, conf.cport))
 
-        data = {
-            "type": "create_group_node_success",
-            "group_id": self.group_id,
-            "id": self.id
-        }
+        # data = {
+        #     "type": "create_group_node_success",
+        #     "group_id": self.group_id,
+        #     "id": self.id
+        # }
 
-        self.rpc_endpoint.send(data, (conf.ip, conf.cport))
+        # self.rpc_endpoint.send(data, (conf.ip, conf.cport))
 
         while True:
             try:
                 try:
                     data, addr = self.rpc_endpoint.recv()
                 except Exception as e:
-                    # logger.info(e)
                     data, addr = None, None
 
                 data = self.redirect(data, addr)
@@ -484,5 +493,4 @@ class Node(object):
             except Exception as e:
                 logger.info(e)
 
-        self.ss.close()
-        # self.cs.close()
+        # self.rpc_endpoint.close()

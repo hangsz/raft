@@ -9,13 +9,11 @@ from .config import config
 
 class Log(object):
 
-    def __init__(self, path):
+    def __init__(self, filename):
+        self.filename = filename
         
-
-        self.file_path = path + '/log.json'
-        
-        if os.path.exists(self.file_path):
-            with open(self.file_path, 'r') as f:
+        if os.path.exists(self.filename):
+            with open(self.filename, 'r') as f:
                 self.entries = json.load(f)
         else:
             self.entries = []
@@ -68,5 +66,5 @@ class Log(object):
 
 
     def save(self):
-        with open(self.file_path, 'w') as f:
+        with open(self.filename, 'w') as f:
             json.dump(self.entries, f, indent=4)
