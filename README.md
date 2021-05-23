@@ -6,6 +6,12 @@ Raft官网：https://raft.github.io/
 
 
 ## raft
+### 整体架构
+![](./resource/raft.svg)
+
+
+### 文件说明
+
 - node.py, log.py为核心代码。
 - node.py 实现raft的节点消息收发、角色转换等功能
 - log.py 实现具体的日志存储
