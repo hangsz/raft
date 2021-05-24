@@ -1,8 +1,3 @@
-# coding: utf-8
-
-__author__ = "zhenhang.sun@gmail.com"
-__version__ = "1.0.0"
-
 import os
 import time
 import json
