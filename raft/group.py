@@ -1,9 +1,3 @@
-import uuid
-from multiprocessing import Process
-
-from . import node
-
-
 class Group(object):
     """
     raft group: one group has 3 or 5 or more raft nodes

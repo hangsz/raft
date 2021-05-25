@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import random
@@ -14,7 +13,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-
 if __name__ == "__main__":
     env = os.environ.get("env")
     conf = config[env] if env else config["DEV"]
@@ -25,12 +23,10 @@ if __name__ == "__main__":
 
     rpc_endpoint.send(data, (conf.ip, conf.mport))
     try:
-        group_meta, _ = rpc_endpoint.recv(timeout=2)
+        group_meta, _ = rpc_endpoint.recv()
         print(group_meta)
     except Exception as e:
         print(e)
-
-    group_meta = {"nodes": [("localhost", 10001)]}
 
     while True:
         try:
