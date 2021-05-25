@@ -23,10 +23,10 @@ Raft官网：https://raft.github.io/
 环境：windows 10系统 单机
 
 ### 测试步骤
-1. 运行 python -m raft.master
-2. 运行 python -m raft.slave
-3. 进入 python -m test.test_master, 启动一个raft group
-4. 进入 python -m test.client, 写入log
+1. 运行 python -m raft.master，启动master节点
+2. 运行 python -m raft.slave， 启动slave节点
+3. 运行 python -m test.test_master, 创建一个raft group
+4. 运行 python -m test.client, 用户写入log
 
 ## 结果说明
 - data/master, master存储的数据
