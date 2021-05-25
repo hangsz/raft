@@ -1,18 +1,11 @@
-import os
-import time
 import json
-import socket
-import random
 import logging
+import os
+import random
+import time
 
-import sys
-
-sys.path.append("..")
-
-from multiprocessing import Process
 from raft.config import config
 from raft.rpc import Rpc
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,33 +13,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-def send(meta):
-
-    rpc_endpoint = Rpc()
-
-    while True:
-        addr = random.choice(meta["nodes"])
-
-        data = {"type": "client_append_entries", "timestamp": int(time.time())}
-        print("send: ", data)
-
-        data = json.dumps(data).encode("utf-8")
-        rpc_endpoint.send(data, addr)
-
-        time.sleep(10)
-
-
-def recv():
-    addr = ("localhost", 10000)
-    ss = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    ss.bind(addr)
-
-    while True:
-        data, addr = ss.recvfrom(65535)
-
-        data = json.loads(data)
-        print("recv: " + str(data["index"]) + " has been committed")
 
 
 if __name__ == "__main__":
@@ -58,8 +24,13 @@ if __name__ == "__main__":
     data = {"type": "get_group"}
 
     rpc_endpoint.send(data, (conf.ip, conf.mport))
-    group_meta, _ = rpc_endpoint.recv()
-    print(group_meta)
+    try:
+        group_meta, _ = rpc_endpoint.recv(timeout=2)
+        print(group_meta)
+    except Exception as e:
+        print(e)
+
+    group_meta = {"nodes": [("localhost", 10001)]}
 
     while True:
         try:
