@@ -1,14 +1,9 @@
 import os
-import sys
-
-sys.path.append("..")
 
 from raft.config import config
 from raft.rpc import Rpc
 
-
 if __name__ == "__main__":
-
     env = os.environ.get("env")
     conf = config[env] if env else config["DEV"]
 

@@ -3,7 +3,6 @@ import json
 import uuid
 import random
 import logging
-from collections import namedtuple
 
 from .config import config
 from .group import Group

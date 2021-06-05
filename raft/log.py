@@ -1,6 +1,5 @@
 import os
 import json
-from .config import config
 
 
 class Log(object):
@@ -38,7 +37,7 @@ class Log(object):
         leader do
         """
         # print('get_entries')
-        return self.entries[max(0, next_index) :]
+        return self.entries[max(0, next_index):]
 
     def delete_entries(self, prev_log_index):
         # print('delete_entries')
