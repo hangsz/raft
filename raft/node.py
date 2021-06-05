@@ -247,7 +247,7 @@ class Node(object):
 
         logger.info('-------------------------------all------------------------------------------')
         
-
+        t = time.time()
         if self.commit_index > self.last_applied:
             self.last_applied = self.commit_index
             logger.info('all: 1. last_applied = ' + str(self.last_applied))
@@ -261,6 +261,7 @@ class Node(object):
         if data['term'] > self.current_term:
             logger.info( f'all: 1. bigger term: { data["term"]} > {self.current_term}' )
             logger.info('     2. become follower')
+            self.next_leader_election_time = t + random.randint(*self.wait_ms)
             self.role = 'follower'
             self.current_term = data['term']
             self.voted_for = None
@@ -306,7 +307,7 @@ class Node(object):
 
     def candidate_do(self, data):
         '''
-        rules for fervers: candidate
+        rules for servers: candidate
         '''
         logger.info('-------------------------------candidate------------------------------------')
         
@@ -375,7 +376,7 @@ class Node(object):
 
     def leader_do(self, data):
         '''
-        rules for fervers: leader
+        rules for servers: leader
         '''
         logger.info('-------------------------------leader---------------------------------------')
 
