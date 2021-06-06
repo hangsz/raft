@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import uuid
 import random
@@ -11,7 +12,7 @@ from .rpc import Rpc
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d]\n%(message)s",
+    format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class Master(object):
 
         self.port_used = 10000
 
+    
     def load_conf(self):
         """
         local or remote
@@ -42,6 +44,7 @@ class Master(object):
         env = os.environ.get("env")
         conf = config[env] if env else config["DEV"]
         return conf
+
 
     def refresh_server_stats(self, data):
         pass
@@ -77,14 +80,36 @@ class Master(object):
             data = {"type": "create_node", "meta": node_meta}
             self.rpc_endpoint.send(data, (node_meta["addr"][0], self.conf.sport))
 
+    def stop_group(self):
+        filename = self.path + random.choice(os.listdir(self.path))
+        with open(filename, "r") as f:
+            meta = json.load(f)
+
+        logger.info(meta)
+
+        group = Group(meta)
+
+        for node_meta in group.all_node_meta:
+            data = {"type": "stop_node", "meta": node_meta}
+            self.rpc_endpoint.send(data, (node_meta["addr"][0], self.conf.sport))
+
     def get_group(self, addr):
         filename = self.path + random.choice(os.listdir(self.path))
         with open(filename, "r") as f:
             meta = json.load(f)
 
-        self.rpc_endpoint.send(meta, addr)
+        data = {"type": "get_group_response", "meta": meta}
+
+        self.rpc_endpoint(data, addr)
+    
+    
+    def stop_master(self):
+        self.rpc_endpoint.close()
+        sys.exit(0)
 
     def run(self):
+        logger.info("slave begin running...")
+
         while True:
             try:
                 data, addr = self.rpc_endpoint.recv()
@@ -95,20 +120,26 @@ class Master(object):
                     meta = data["meta"]
                     self.create_group(meta)
 
-                elif data["type"] == "create_group_node_success":
-                    logger.info(data["group_id"] + "_" + data["id"])
+                # elif data["type"] == "create_group_node_success":
+                #     logger.info(data["group_id"] + "_" + data["id"])
 
-                elif data["type"] == "stat":
-                    self.refresh_stat(data)
+                # elif data["type"] == "stat":
+                #     self.refresh_stat(data)
 
                 elif data["type"] == "get_group":
+                    logger.info("get group")
                     self.get_group(addr)
+                    
+                elif data["type"] == "stop_group":
+                    logger.info("stop group")
+                    self.stop_group()
 
-                # break
+                elif data["type"] == "stop_master":
+                    logger.info("stop master")
+                    self.stop_master()
+
             except Exception as e:
                 logger.info(e)
-
-        self.rpc_endpoint.close()
 
 
 if __name__ == "__main__":

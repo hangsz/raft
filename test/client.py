@@ -1,5 +1,7 @@
 import logging
 import os
+import sys
+import traceback
 import random
 import time
 
@@ -23,10 +25,13 @@ if __name__ == "__main__":
 
     rpc_endpoint.send(data, (conf.ip, conf.mport))
     try:
-        group_meta, _ = rpc_endpoint.recv()
+        data, _ = rpc_endpoint.recv()
+        group_meta = data['meta']
+        
         print(group_meta)
-    except Exception as e:
-        print(e)
+    except Exception:
+        traceback.print_exc()
+        sys.exit(1)
 
     while True:
         try:
@@ -34,6 +39,7 @@ if __name__ == "__main__":
             print("recv: commit success", res)
         except Exception as e:
             pass
+        
         addr = random.choice(group_meta["nodes"])
         data = {"type": "client_append_entries", "timestamp": int(time.time())}
         print("send: ", data)

@@ -1,14 +1,11 @@
 import os
+import sys
 
 from raft.config import config
 from raft.rpc import Rpc
 
-if __name__ == "__main__":
-    env = os.environ.get("env")
-    conf = config[env] if env else config["DEV"]
 
-    rpc_endpoint = Rpc()
-
+def create_node():
     metas = [
         {
             "meta": {
@@ -37,14 +34,32 @@ if __name__ == "__main__":
     ]
 
     # create node
-    # for meta in metas:
-    #     data = {
-    #         'type': 'create_node',
-    #         'meta': meta
-    #     }
-    #     rpc_endpoint.send(data, (conf.ip, conf.cport))
-
-    # kill node
     for meta in metas:
-        data = {"type": "kill_node", "meta": meta}
+        data = {
+            'type': 'create_node',
+            'meta': meta
+        }
         rpc_endpoint.send(data, (conf.ip, conf.cport))
+
+
+    rpc_endpoint.close()
+
+
+def stop_slave():
+    data = {'type': "stop_slave"}
+
+    rpc_endpoint.send(data, (conf.ip, conf.sport))
+
+
+if __name__ == "__main__":
+    env = os.environ.get("env")
+    conf = config[env] if env else config["DEV"]
+
+    rpc_endpoint = Rpc()
+
+    act = sys.argv[1]
+
+    if act == "create_node":
+        create_node()
+    elif act == "stop_slave":
+        stop_slave()

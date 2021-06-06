@@ -254,6 +254,7 @@ class Node(object):
 
         if data == None:
             return
+            
 
         if data['type'] == 'client_append_entries':
             return

@@ -1,4 +1,5 @@
-import os
+import os, signal
+import sys
 import json
 import logging
 from multiprocessing import Process
@@ -9,9 +10,14 @@ from .rpc import Rpc
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d]\n%(message)s",
+    format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def exit():
+    logger.info("exit")
+    sys.exit(0)
 
 
 class Slave(object):
@@ -44,6 +50,7 @@ class Slave(object):
 
             self.start_raft_node(node_conf)
 
+
     def create_node(self, meta):
         """
         start raft node
@@ -51,21 +58,29 @@ class Slave(object):
         node = Node(meta)
         node.run()
 
-    def kill_node(self, meta):
-        p = self.childrens.pop((meta["group_id"], meta["id"]))
-        p.terminate()
+    def stop_node(self, meta):
+        pid = self.childrens.pop((meta["group_id"], meta["id"]), None)
+        logger.info(pid)
+        if not pid:
+            return 
+        os.kill(pid, signal.SIGTERM)
 
     def save_node_meta(self, meta):
         filename = self.path + meta["group_id"] + "_" + meta["id"] + ".json"
         with open(filename, "w") as f:
             json.dump(meta, f, indent=4)
 
+    def stop_slave(self):
+        self.rpc_endpoint.close()
+        sys.exit(0)
+
     def run(self):
-        # self.restart_raft_node()
+        logger.info("slave begin running...")
 
         while True:
-            data, addr = self.rpc_endpoint.recv()
             try:
+                data, addr = self.rpc_endpoint.recv()
+
                 if data["type"] == "create_node":
                     logger.info("create node")
 
@@ -76,13 +91,14 @@ class Slave(object):
                     p.start()
                     self.childrens[(meta["group_id"], meta["id"])] = p.pid
 
-                elif data["type"] == "kill_node":
-                    logger.info("create node")
+                elif data["type"] == "stop_node":
+                    logger.info("stop node")
                     meta = data["meta"]
-                    self.stop(meta)
+                    self.stop_node(meta)
 
-                elif data["type"] == "create_node_success":
-                    logger.info("create node success")
+                elif data["type"] == "stop_slave":
+                    logger.info("stop slave")
+                    self.stop_slave()
 
             except Exception as e:
                 logger.info(e)

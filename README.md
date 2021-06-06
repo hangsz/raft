@@ -25,8 +25,13 @@ Raft官网：https://raft.github.io/
 ### 测试步骤
 1. 运行 python -m raft.master, 启动master节点
 2. 运行 python -m raft.slave, 启动slave节点
-3. 运行 python -m test.test_master, 创建一个raft group
-4. 运行 python -m test.client, 用户写入log
+3. 运行 python -m test.test_master
+    - create_group, create一个raft group
+    - stop_group, 安全终止 一个raft group
+    - stop_master, 安全终止master
+4. 运行 python -m test.test_slave
+    - stop_slave, 安全终止master
+5. 运行 python -m test.client, 用户写入log
 
 ## 结果说明
 - data/master, master存储的数据
