@@ -30,7 +30,7 @@ Raft官网：https://raft.github.io/
     - param: stop_group, 安全终止 一个raft group
     - param: stop_master, 安全终止master
 4. 运行 python -m test.test_slave **param**
-    - param: stop_slave, 安全终止master
+    - param: stop_slave, 安全终止slave
 5. 运行 python -m test.client, 用户写入log
 
 ## 结果说明
