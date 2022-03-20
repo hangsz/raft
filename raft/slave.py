@@ -1,24 +1,26 @@
-import os, signal
-import sys
+#!/usr/bin/env python
+# coding: utf-8
+'''
+@File    :   slave.py
+@Time    :   2022/03/19 15:04:45
+@Author  :   https://github.com/hangsz
+@Version :   0.1.0
+@Contact :   zhenhang.sun@gmail.com
+'''
+
 import json
 import logging
+import os
+import signal
+import sys
+import traceback
 from multiprocessing import Process
 
-from .node import Node
 from .config import config
+from .node import Node
 from .rpc import Rpc
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s",
-)
 logger = logging.getLogger(__name__)
-
-
-def exit():
-    logger.info("exit")
-    sys.exit(0)
-
 
 class Slave(object):
     """
@@ -28,45 +30,47 @@ class Slave(object):
     def __init__(self):
         self.conf = self.load_conf()
         self.rpc_endpoint = Rpc((self.conf.ip, self.conf.sport))
-
-        self.path = self.conf.slave_path
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
-
+        
         self.childrens = {}
-
-    def load_conf(self):
+    
+    @staticmethod
+    def load_conf():
         env = os.environ.get("env")
         conf = config[env] if env else config["DEV"]
         return conf
 
-    def restart_raft_node(self):
-        if not os.path.exists(self.path):
-            return
+    def create_node(self, meta: dict):
+        """create and start a raft node
 
-        for file in os.listdir(self.path):
-            with open(file, "r") as f:
-                node_conf = json.load(f)
-
-            self.start_raft_node(node_conf)
-
-
-    def create_node(self, meta):
-        """
-        start raft node
+        Args:
+            meta (dict): node meta
         """
         node = Node(meta)
         node.run()
 
-    def stop_node(self, meta):
+    def stop_node(self, meta: dict):
+        """stop a node
+
+        Args:
+            meta (dict): node meta
+        """
         pid = self.childrens.pop((meta["group_id"], meta["id"]), None)
         logger.info(pid)
         if not pid:
-            return 
+            return
         os.kill(pid, signal.SIGTERM)
 
-    def save_node_meta(self, meta):
-        filename = self.path + meta["group_id"] + "_" + meta["id"] + ".json"
+    def save_node_meta(self, meta: dict):
+        """save node meta data
+
+        Args:
+            meta (dict): meta data
+        """
+        self.path = self.conf.slave_path
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
+
+        filename = os.path.join(self.path, meta["group_id"]+"_"+meta["id"]+".json")
         with open(filename, "w") as f:
             json.dump(meta, f, indent=4)
 
@@ -83,7 +87,6 @@ class Slave(object):
 
                 if data["type"] == "create_node":
                     logger.info("create node")
-
                     meta = data["meta"]
                     logger.info(meta)
                     self.save_node_meta(meta)
@@ -99,11 +102,23 @@ class Slave(object):
                 elif data["type"] == "stop_slave":
                     logger.info("stop slave")
                     self.stop_slave()
+            except KeyboardInterrupt:
+                self.rpc_endpoint.close()
+                sys.exit(0)
+            except Exception:
+                logger.info(traceback.format_exc())
 
-            except Exception as e:
-                logger.info(e)
 
-
-if __name__ == "__main__":
+def main() -> int:
     slave = Slave()
     slave.run()
+
+    return 0
+
+if __name__ == "__main__":
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s",
+        )
+    sys.exit(main())

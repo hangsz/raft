@@ -1,36 +1,49 @@
+#!/usr/bin/env python
+# coding: utf-8
+'''
+@File    :   node.py
+@Time    :   2022/03/19 20:40:29
+@Author  :   https://github.com/hangsz
+@Version :   0.1.0
+@Contact :   zhenhang.sun@gmail.com
+'''
+
 import os
+import sys
 import json
 import time
 import random
 import logging
+import traceback
+from turtle import st
 
 from .log import Log
 from .rpc import Rpc
 from .config import config
 
-
-# logging.basicConfig(level=logging.INFO,
-#                     format='%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s')
 logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.INFO)
 logger.propagate = False
 
-env = os.environ.get("env")
-conf = config[env] if env else config['DEV']
-
 class Node(object):
-    """
-    raft node
+    """raft node
     """
 
-    def __init__(self, meta):
+    def __init__(self, meta: dict):
+        """
+
+        Args:
+            meta (dict): node meta
+        """
         self.role = 'follower'
         
         self.group_id = meta['group_id']
         self.id = meta['id']
         self.addr = meta['addr']
         self.peers = meta['peers']
-
-        self.path = conf.node_path
+        
+        self.conf = self.load_conf()
+        self.path = self.conf.node_path
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
@@ -41,7 +54,7 @@ class Node(object):
         # init persistent state
         self.load()
         
-        logname = self.path+self.group_id + '_' + self.id + "_log.json"
+        logname = os.path.join(self.path, self.group_id+'_'+self.id+'_log.json')
         self.log = Log(logname)
 
         # volatile state
@@ -68,425 +81,418 @@ class Node(object):
         self.next_leader_election_time = time.time() + random.randint(*self.wait_ms)
         self.next_heartbeat_time = 0
 
-  
         # rpc
         self.rpc_endpoint = Rpc(self.addr, timeout=2)
 
         # log
         fmt = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s')
-        handler = logging.FileHandler(self.path + self.group_id + '_' + self.id + '.log', 'a')
+        handler = logging.FileHandler(os.path.join(self.path, self.group_id+'_'+self.id+'.log'), 'a')
         handler.setFormatter(fmt)
         logger.addHandler(handler)
+    
+    @staticmethod
+    def load_conf():
+        env = os.environ.get("env")
+        conf = config[env] if env else config['DEV']
+        return conf
 
     def load(self):
-        filename = self.path + self.group_id + "_" + self.id + '_persistent.json'
+        filename = os.path.join(self.path, self.group_id+'_'+self.id+'_persistent.json')
         if os.path.exists(filename):
             with open(filename, 'r') as f:
-                data = json.load(f)
-
-            self.current_term = data['current_term']
-            self.voted_for = data['voted_for']
-
+                persistent = json.load(f)
+            self.current_term = persistent['current_term']
+            self.voted_for = persistent['voted_for']
         else:
             self.save()
 
     def save(self):
-        data = {'current_term': self.current_term,
-                'voted_for': self.voted_for,
-                }
+        persistent = {'current_term': self.current_term,
+                      'voted_for': self.voted_for}
 
-        filename = self.path + self.group_id + "_" + self.id + '_persistent.json'
+        filename = os.path.join(self.path, self.group_id+'_'+self.id+'_persistent.json')
         with open(filename, 'w') as f:
-            json.dump(data, f, indent=4)
+            json.dump(persistent, f, indent=4)
 
-    def redirect(self, data, addr):
-        if data == None:
-            return None
+    def redirect(self, data: dict, addr: tuple[str, int]) -> dict:
+        """redirect to correct node
 
-        if data['type'] == 'client_append_entries':
+        Args:
+            data (dict): 
+            addr (tuple[str, int]): src (ip, port)
+
+        Returns:
+            dict: 
+        """
+        if not data:
+            return {}
+
+        if data.get('type') == 'client_append_entries':
             if self.role != 'leader':
                 if self.leader_id:
-                    logger.info('redirect: client_append_entries to leader')
-                    self.rpc_endpoint.send(data, self.peers[self.leader_id])
-                return None
+                    logger.info(f"redirect client_append_entries to leader: {self.leader_id}")
+                    self.rpc_endpoint.send(data, self.peers.get(self.leader_id))
+                return {}
             else:
-                self.client_addr = (addr[0], conf.cport)
+                self.client_addr = (addr[0], self.conf.cport)
                 # logger.info("client addr " + self.client_addr[0] +'_' +str(self.client_addr[1]))
                 return data
+        
+        if data.get('dst_id') != self.id:
+            logger.info(f"redirect to: {data.get('dst_id')}")
+            self.rpc_endpoint.send(data, self.peers.get(data.get('dst_id')))
+            return {}
 
-        if data['dst_id'] != self.id:
-            logger.info('redirect: to ' + data['dst_id'])
-            # logger.info('redirec to leader')
-            self.rpc_endpoint.send(data, self.peers[data['dst_id']])
-            return None
-        else:
-            return data
 
         return data
 
-    def append_entries(self, data):
-        '''
-        append entries rpc
-        only used in follower state
-        '''
+    def append_entries(self, data: dict) -> bool:
+        """append entries rpc. only used in follower state
+
+        Args:
+            data (dict): 
+
+        Returns:
+            bool: 
+        """
         response = {'type': 'append_entries_response',
                     'src_id': self.id,
-                    'dst_id': data['src_id'],
+                    'dst_id': data.get('src_id'),
                     'term': self.current_term,
-                    'success': False
-                    }
+                    'success': False}
 
-        # append_entries: rule 1
-        if data['term'] < self.current_term:
-            logger.info('          2. smaller term')
-            logger.info('          3. success = False: smaller term')
-            logger.info('          4. send append_entries_response to leader ' + data['src_id'])
+        # append_entries rule 1
+        if data.get('term') < self.current_term:
+            logger.info('1. success = False: smaller term')
+            logger.info(f"  send append_entries_response to leader: {data.get('src_id')}")
             response['success'] = False
-            self.rpc_endpoint.send(response, self.peers[data['src_id']])
-            return
-
-
-        self.leader_id = data['leader_id']
-
-        # heartbeat
-        if data['entries'] == []:
-            logger.info('       4. heartbeat')
-            return
-
-        prev_log_index = data['prev_log_index']
-        prev_log_term = data['prev_log_term']
-        
-        tmp_prev_log_term = self.log.get_log_term(prev_log_index)
-
-        # append_entries: rule 2, 3
-        # append_entries: rule 3
-        if tmp_prev_log_term != prev_log_term:
-            logger.info('          4. success = False: index not match or term not match')
-            logger.info('          5. send append_entries_response to leader ' + data['src_id'])
-            logger.info('          6. log delete_entries')
-            logger.info('          6. log save')
-
-            response['success'] = False
-            self.rpc_endpoint.send(response, self.peers[data['src_id']])
-            self.log.delete_entries(prev_log_index)
-
-        # append_entries rule 4
+            self.rpc_endpoint.send(response, self.peers.get(data.get('src_id')))
+            return False
+       
+        if not data.get("entries"):
+            logger.info("heartbeat")
         else:
-            logger.info('          4. success = True')
-            logger.info('          5. send append_entries_response to leader ' + data['src_id'])
-            logger.info('          6. log append_entries')
-            logger.info('          7. log save')
+            # append_entries rule 2, 3
+            prev_log_index = data.get('prev_log_index', -1)
+            prev_log_term = data.get('prev_log_term')
 
-            response['success'] = True
-            self.rpc_endpoint.send(response, self.peers[data['src_id']])
-            self.log.append_entries(prev_log_index, data['entries'])
+            if prev_log_term != self.log.get_log_term(prev_log_index):
+                logger.info('2. success = False: index not match or term not match')
+                response['success'] = False
+                logger.info('3. log delete_entries')
+                self.log.delete_entries(prev_log_index)
+            else:
+            # append_entries rule 4
+                logger.info('4. success = True')
+                logger.info('   log append_entries')
+                response['success'] = True
+                self.log.append_entries(prev_log_index, data.get('entries', []))
 
-            # append_entries rule 5
-            leader_commit = data['leader_commit']
-            if leader_commit > self.commit_index:
-                commit_index = min(leader_commit, self.log.last_log_index)
-                self.commit_index = commit_index
-                logger.info('          8. commit_index = ' + str(commit_index))
+            logger.info(f"   send append_entries_response to leader: {data.get('src_id')}")
+            self.rpc_endpoint.send(response, self.peers.get(data.get('src_id')))
 
-        return
+        # append_entries rule 5
+        leader_commit = data.get('leader_commit')
+        if leader_commit > self.commit_index:
+            self.commit_index = min(leader_commit, self.log.last_log_index)
+            logger.info(f"5. commit_index = {str(self.commit_index)}")
+        
+        # set leader_id
+        self.leader_id = data.get('leader_id')
 
-    def request_vote(self, data):
-        '''
-        request vote rpc
-        only used in follower state
-        '''
+        return True
 
+    def request_vote(self, data: dict) -> bool:
+        """request vote rpc. only used in follower state
+
+        Args:
+            data (dict): 
+
+        Returns:
+            bool: 
+        """
         response = {'type': 'request_vote_response',
                     'src_id': self.id,
                     'dst_id': data['src_id'],
                     'term': self.current_term,
-                    'vote_granted': False
-                    }
+                    'vote_granted': False}
 
-        # request vote: rule 1
-        if data['term'] < self.current_term:
-            logger.info('          2. smaller term')
-            logger.info('          3. success = False')
-            logger.info('          4. send request_vote_response to candidate ' + data['src_id'])
+        # request_vote rule 1
+        if data.get('term') < self.current_term:
+            logger.info( '1. success = False: smaller term')
+            logger.info(f"   send request_vote_response to candidate: {data.get('src_id')}")
             response['vote_granted'] = False
-            self.rpc_endpoint.send(response, self.peers[data['src_id']])
-            return
+            self.rpc_endpoint.send(response, self.peers.get(data.get('src_id')))
+            return False
+        
+        # request_vote rule 2
+        last_log_index = data.get('last_log_index')
+        last_log_term = data.get('last_log_term')
 
-        logger.info('          2. same term')
-        candidate_id = data['candidate_id']
-        last_log_index = data['last_log_index']
-        last_log_term = data['last_log_term']
-
-        if self.voted_for == None or self.voted_for == candidate_id:
+        if self.voted_for is None or self.voted_for == data.get('candidate_id'):
             if last_log_index >= self.log.last_log_index and last_log_term >= self.log.last_log_term:
-                self.voted_for = data['src_id']
+                self.voted_for = data.get('src_id')
                 self.save() 
                 response['vote_granted'] = True
-                self.rpc_endpoint.send(response, self.peers[data['src_id']])
-                logger.info('          3. success = True: candidate log is newer')
-                logger.info('          4. send request_vote_response to candidate ' + data['src_id'])
+                logger.info( '2. success = True: candidate log is newer')
+                logger.info(f"   send request_vote_response to candidate: {data['src_id']}")
+                self.rpc_endpoint.send(response, self.peers.get(data.get('src_id')))
+
+                return True
             else:
                 self.voted_for = None
                 self.save()
                 response['vote_granted'] = False
-                self.rpc_endpoint.send(response, self.peers[data['src_id']])
-                logger.info('          3. success = False: candidate log is older')
-                logger.info('          4. send request_vote_response to candidate ' + data['src_id'])
+                logger.info('2. success = False: candidate log is older')
+                logger.info(f"   send request_vote_response to candidate: {data['src_id']}")
+                self.rpc_endpoint.send(response, self.peers.get(data.get('src_id')))
+                return False
         else:
             response['vote_granted'] = False
-            self.rpc_endpoint.send(response, self.peers[data['src_id']])
-            logger.info('          3. success = False: has vated for ' + self.voted_for)
-            logger.info('          4. send request_vote_response to candidate ' + data['src_id'])
+            logger.info(f"2. success = False: has vated for: {self.voted_for}")
 
-        return
+            return True
 
-    def all_do(self, data):
-        '''
-        all servers: rule 1, 2
-        '''
+    def all_do(self, data: dict):
+        """all rule 1, 2
 
-        logger.info('-------------------------------all------------------------------------------')
-        
-        t = time.time()
+        Args:
+            data (dict):
+        """
+        logger.info(f"all {self.id}".center(100, '-'))
+        # all rule 1
         if self.commit_index > self.last_applied:
             self.last_applied = self.commit_index
-            logger.info('all: 1. last_applied = ' + str(self.last_applied))
+            logger.info(f"1. last_applied = {str(self.last_applied)}")
+            logger.info(f"   attention: need to apply to state machine")
 
-        if data == None:
-            return
-            
-
-        if data['type'] == 'client_append_entries':
-            return
-
-        if data['term'] > self.current_term:
-            logger.info( f'all: 1. bigger term: { data["term"]} > {self.current_term}' )
-            logger.info('     2. become follower')
-            self.next_leader_election_time = t + random.randint(*self.wait_ms)
+        # all rule 2
+        if data.get('term', -1) > self.current_term:
+            logger.info( "2. become follower")
+            logger.info(f"   receive bigger term: {data.get('term')} > {self.current_term}")
+            self.next_leader_election_time = time.time() + random.randint(*self.wait_ms)
             self.role = 'follower'
-            self.current_term = data['term']
+            self.current_term = data.get('term')
             self.voted_for = None
             self.save()
+            self.leader_id = None
 
-        return
+    def follower_do(self, data: dict) -> bool:
+        """rules for servers: follower
 
-    def follower_do(self, data):
+        Args:
+            data (dict):
+        
+        Returns:
+            bool: 
+        """
+        logger.info(f"follower {self.id}".center(100, '-'))
+        reset = False
 
-        '''
-        rules for servers: follower
-        '''
-        logger.info('-------------------------------follower-------------------------------------')
+        # follower rule 1
+        if data.get('type') == 'append_entries':
+            logger.info( "1. append_entries")
+            logger.info(f"   receive from leader: {data.get('src_id')}")
+            reset = self.append_entries(data)
 
-        t = time.time()
-        # follower rules: rule 1
-        if data != None:
-
-            if data['type'] == 'append_entries':
-                logger.info('follower: 1. recv append_entries from leader ' + data['src_id'])
-
-                if data['term'] == self.current_term:
-                    logger.info('          2. same term')
-                    logger.info('          3. reset next_leader_election_time')
-                    self.next_leader_election_time = t + random.randint(*self.wait_ms)
-                self.append_entries(data)
-
-            elif data['type'] == 'request_vote':
-                logger.info('follower: 1. recv request_vote from candidate ' + data['src_id'])
-                self.request_vote(data)
-
-        # follower rules: rule 2
-        if t > self.next_leader_election_time:
-            logger.info('follower：1. become candidate')
-            self.next_leader_election_time = t + random.randint(*self.wait_ms)
+        elif data.get('type') == 'request_vote':
+            logger.info( "1. request_vote")
+            logger.info(f"   recevive from candidate: {data.get('src_id')}")
+            reset = self.request_vote(data)
+        
+        # reset next_leader_election_time
+        if reset: 
+            logger.info('   reset next_leader_election_time')
+            self.next_leader_election_time = time.time() + random.randint(*self.wait_ms)
+        
+        # follower rule 2
+        if time.time() > self.next_leader_election_time:
+            logger.info('1. become candidate')
+            logger.info('   no request from leader or candidate')
+            self.next_leader_election_time = time.time() + random.randint(*self.wait_ms)
             self.role = 'candidate'
             self.current_term += 1
             self.voted_for = self.id
             self.save()
-            self.vote_ids = {_id: 0 for _id in self.peers}
+            self.leader_id = None
+            self.vote_ids = {_id: False for _id in self.peers}
+            
+            return True
 
-        return
+    def candidate_do(self, data: dict) -> bool:
+        """rules for servers: candidate
 
-    def candidate_do(self, data):
-        '''
-        rules for servers: candidate
-        '''
-        logger.info('-------------------------------candidate------------------------------------')
+        Args:
+            data (dict):
         
-        t = time.time()
-        # candidate rules: rule 1
+        Returns:
+            bool: 
+        """
+        logger.info(f"candidate {self.id}".center(100, '-'))
+        # candidate rule 1
         for dst_id in self.peers:
-            if self.vote_ids[dst_id] == 0:
-                logger.info('candidate: 1. send request_vote to peer ' + dst_id)
-                request = {
-                    'type': 'request_vote',
-                    'src_id': self.id,
-                    'dst_id': dst_id,
-                    'term': self.current_term,
-                    'candidate_id': self.id,
-                    'last_log_index': self.log.last_log_index,
-                    'last_log_term': self.log.last_log_term
-                }
-                # logger.info(request)
+            # if self.vote_ids.get(dst_id):
+            #     continue
+            request = {
+                'type': 'request_vote',
+                'src_id': self.id,
+                'dst_id': dst_id,
+                'term': self.current_term,
+                'candidate_id': self.id,
+                'last_log_index': self.log.last_log_index,
+                'last_log_term': self.log.last_log_term
+            }
+            logger.info(f"1. send request_vote request to peer: {dst_id}")
+            self.rpc_endpoint.send(request, self.peers.get(dst_id))
 
-                self.rpc_endpoint.send(request, self.peers[dst_id])
-        
-        # if data != None and data['term'] < self.current_term:
-        #     logger.info('candidate: 1. smaller term from ' + data['src_id'])
-        #     logger.info('           2. ignore')
-            # return
+        # candidate rule 2
+        if data.get('type') == 'request_vote_response':
+            logger.info(f"1. receive request_vote_response from follower: {data.get('src_id')}")
+            self.vote_ids[data.get('src_id')] = data.get('vote_granted')
+            vote_count = sum(list(self.vote_ids.values()))
 
-        if data != None and data['term'] == self.current_term:
-            # candidate rules: rule 2
-            if data['type'] == 'request_vote_response':
-                logger.info('candidate: 1. recv request_vote_response from follower ' + data['src_id'])
-
-                self.vote_ids[data['src_id']] = data['vote_granted']
-                vote_count = sum(list(self.vote_ids.values()))
-
-                if vote_count >= len(self.peers)//2:
-                    logger.info('           2. become leader')
-                    self.role = 'leader'
-                    self.voted_for = None
-                    self.save()
-                    self.next_heartbeat_time = 0
-                    self.next_index = {_id: self.log.last_log_index + 1 for _id in self.peers}
-                    self.match_index = {_id: 0 for _id in self.peers}
-                    return
-
-            # candidate rules: rule 3
-            elif data['type'] == 'append_entries':
-                logger.info('candidate: 1. recv append_entries from leader ' + data['src_id'])
-                logger.info('           2. become follower')
-                self.next_leader_election_time = t + random.randint(*self.wait_ms)
-                self.role = 'follower'
+            if vote_count >= len(self.peers)//2:
+                logger.info('2. become leader: get enougth vote')
+                self.role = 'leader'
                 self.voted_for = None
                 self.save()
-                return
+                self.next_heartbeat_time = 0
+                self.next_index = {_id: self.log.last_log_index + 1 for _id in self.peers}
+                self.match_index = {_id: 0 for _id in self.peers}
+                
+                return True
+
+        # candidate rule 3
+        elif data.get('type') == 'append_entries':
+            logger.info(f"1. receive append_entries request from leader: {data.get('src_id')}")
+            logger.info('2. become follower')
+            self.next_leader_election_time = time.time() + random.randint(*self.wait_ms)
+            self.role = 'follower'
+            self.voted_for = None
+            self.save()
+            return 
 
         # candidate rules: rule 4
-        if t > self.next_leader_election_time:
+        if time.time() > self.next_leader_election_time:
             logger.info('candidate: 1. leader_election timeout')
             logger.info('           2. become candidate')
-            self.next_leader_election_time = t + random.randint(*self.wait_ms)
+            self.next_leader_election_time = time.time() + random.randint(*self.wait_ms)
             self.role = 'candidate'
             self.current_term += 1
             self.voted_for = self.id
             self.save()
-            self.vote_ids = {_id: 0 for _id in self.peers}
+            self.vote_ids = {_id: False for _id in self.peers}
+
             return
 
-    def leader_do(self, data):
-        '''
-        rules for servers: leader
-        '''
-        logger.info('-------------------------------leader---------------------------------------')
+    def leader_do(self, data: dict):
+        '''rules for leader
 
-        # leader rules: rule 1, 3
-        t = time.time()
-        if t > self.next_heartbeat_time:
-            self.next_heartbeat_time = t + random.randint(0, 5)
+        Args:
+            data (dict):
+        '''
+        logger.info(f"leader {self.id}".center(100, '-'))
+        # leader rule 1, 3
+        if  time.time() > self.next_heartbeat_time:
+            self.next_heartbeat_time = time.time() + random.randint(0, 5)
 
             for dst_id in self.peers:
-                logger.info('leader：1. send append_entries to peer ' + dst_id)
-
                 request = {'type': 'append_entries',
                            'src_id': self.id,
                            'dst_id': dst_id,
                            'term': self.current_term,
                            'leader_id': self.id,
                            'prev_log_index': self.next_index[dst_id] - 1,
-                           'prev_log_term': self.log.get_log_term(self.next_index[dst_id] - 1),
+                           'prev_log_term': self.log.get_log_term(self.next_index[dst_id]-1),
                            'entries': self.log.get_entries(self.next_index[dst_id]),
-                           'leader_commit': self.commit_index
-                           }
+                           'leader_commit': self.commit_index}
+                
+                logger.info(f"1. send append_entries to peer: {dst_id}")
+                self.rpc_endpoint.send(request, self.peers.get(dst_id))
 
-                self.rpc_endpoint.send(request, self.peers[dst_id])
-
-        # leader rules: rule 2
-        if data != None and data['type'] == 'client_append_entries':
+        # leader rule 2
+        if  data.get('type') == 'client_append_entries':
             data['term'] = self.current_term
             self.log.append_entries(self.log.last_log_index, [data])
 
-            logger.info('leader：1. recv append_entries from client')
-            logger.info('        2. log append_entries')
-            logger.info('        3. log save')
+            logger.info('2. receive append_entries from client')
+            logger.info('   log append_entries')
+            logger.info('   log save')
 
             return
 
-        # leader rules: rule 3.1, 3.2
-        if data != None and data['term'] == self.current_term:
-            if data['type'] == 'append_entries_response':
-                logger.info('leader：1. recv append_entries_response from follower ' + data['src_id'])
-                if data['success'] == False:
-                    self.next_index[data['src_id']] -= 1
-                    logger.info('        2. success = False')
-                    logger.info('        3. next_index - 1')
-                else:
-                    self.match_index[data['src_id']] = self.next_index[data['src_id']]
-                    self.next_index[data['src_id']] = self.log.last_log_index + 1
-                    logger.info('        2. success = True')
-                    logger.info('        3. match_index = ' + str(self.match_index[data['src_id']]) +  ' next_index = ' + str(self.next_index[data['src_id']]))
+        # leader rule 3
+        if data.get('type') == 'append_entries_response':
+            logger.info(f"1. receive append_entries_response from follower: {data.get('src_id')}")
+            if data.get('success') == False:
+                self.next_index[data.get('src_id')] -= 1
+                logger.info('2. success = False, next_index - 1')
+            else:
+                self.match_index[data.get('src_id')] = self.next_index.get(data.get('src_id'))
+                self.next_index[data.get('src_id')] = self.log.last_log_index + 1
+                logger.info(' 2. success = True')
+                logger.info(f"  next_index = {str(self.next_index.get(data.get('src_id')))}")
+                logger.info(f"  match_index = {str(self.match_index.get(data.get('src_id')))}")
 
-        # leader rules: rule 4
+        # leader rule 4
         while True:
             N = self.commit_index + 1
-
             count = 0
             for _id in self.match_index:
                 if self.match_index[_id] >= N:
                     count += 1
                 if count >= len(self.peers)//2:
                     self.commit_index = N
-                    logger.info('leader：1. commit + 1')
+                    logger.info('4. commit + 1')
 
                     if self.client_addr:
                         response = {'index': self.commit_index}
                         self.rpc_endpoint.send(response, self.client_addr)
-
                     break
             else:
-                logger.info('leader：2. commit = ' + str(self.commit_index))
+                logger.info(f"4. commit = {str(self.commit_index)}")
                 break
 
 
     def run(self):
-
-        # data = {
-        #     "type": "create_node_success",
-        #     "group_id": self.group_id,
-        #     "id": self.id
-        # }
-        # self.rpc_endpoint.send(data, (conf.ip, conf.cport))
-
-        # data = {
-        #     "type": "create_group_node_success",
-        #     "group_id": self.group_id,
-        #     "id": self.id
-        # }
-
-        # self.rpc_endpoint.send(data, (conf.ip, conf.cport))
-
         while True:
             try:
                 try:
                     data, addr = self.rpc_endpoint.recv()
                 except Exception as e:
-                    data, addr = None, None
+                    data, addr = {}, None
 
                 data = self.redirect(data, addr)
-
                 self.all_do(data)
-
+                
                 if self.role == 'follower':
-                    self.follower_do(data)
+                    if self.follower_do(data):
+                        continue
 
                 if self.role == 'candidate':
-                    self.candidate_do(data)
+                    if self.candidate_do(data):
+                        continue
 
                 if self.role == 'leader':
                     self.leader_do(data)
+            
+            except KeyboardInterrupt:
+                self.rpc_endpoint.close()
+                sys.exit(0)
+            except Exception:
+                traceback.print_exc()
+                logger.info(traceback.format_exc())
 
-            except Exception as e:
-                logger.info(e)
 
-        # self.rpc_endpoint.close()
+def main() -> int:
+    meta = {"group_id": "2",
+            "id": "0",
+            "addr": ("localhost", 10000),
+            "peers": {"1": ("localhost", 10001), "2": ("localhost", 10002)}}
+
+    node = Node(meta)
+
+    node.run()
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,3 +1,14 @@
+#!/usr/bin/env python
+# coding: utf-8
+'''
+@File    :   config.py
+@Time    :   2022/03/19 14:45:22
+@Author  :   https://github.com/hangsz
+@Version :   0.1.0
+@Contact :   zhenhang.sun@gmail.com
+'''
+
+
 class Config(object):
     ip = "localhost"
     mport = 9998 # master port

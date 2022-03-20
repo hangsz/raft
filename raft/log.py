@@ -1,9 +1,23 @@
+#!/usr/bin/env python
+# coding: utf-8
+'''
+@File    :   log.py
+@Time    :   2022/03/19 14:45:43
+@Author  :   https://github.com/hangsz
+@Version :   0.1.0
+@Contact :   zhenhang.sun@gmail.com
+'''
+
 import os
 import json
 
-
 class Log(object):
-    def __init__(self, filename):
+    def __init__(self, filename: str):
+        """_summary_
+
+        Args:
+            filename (str): .log path
+        """
         self.filename = filename
 
         if os.path.exists(self.filename):
@@ -20,36 +34,51 @@ class Log(object):
     def last_log_term(self):
         return self.get_log_term(self.last_log_index)
 
-    def get_log_term(self, log_index):
+    def get_log_term(self, log_index: int) ->int:
         """
-        leader do
-        follower
+
+        Args:
+            log_index (int): 
+
+        Returns:
+            int: 
         """
-        if log_index >= len(self.entries):
-            return -1
-        elif log_index < 0:
+    
+        if log_index < 0 or log_index >= len(self.entries):
             return -1
         else:
             return self.entries[log_index]["term"]
 
-    def get_entries(self, next_index):
+    def get_entries(self, next_index: int) -> list[dict]:
+        """get entries
+
+        Args:
+            next_index (int): next index
+
+        Returns:
+            list[dict]: 
         """
-        leader do
-        """
-        # print('get_entries')
         return self.entries[max(0, next_index):]
 
-    def delete_entries(self, prev_log_index):
-        # print('delete_entries')
+    def delete_entries(self, prev_log_index: int):
+        """delete entries
 
+        Args:
+            prev_log_index (int): log index
+        """
+        if prev_log_index < 0 or prev_log_index >= len(self.entries):
+            return
         self.entries = self.entries[: max(0, prev_log_index)]
         self.save()
 
-    def append_entries(self, prev_log_index, entries):
-        # print('append_entries')
+    def append_entries(self, prev_log_index: int, entries: list[dict]):
+        """
 
+        Args:
+            prev_log_index (int): log index
+            entries (list[dict]): 
+        """
         self.entries = self.entries[: max(0, prev_log_index + 1)] + entries
-
         self.save()
 
     def save(self):
