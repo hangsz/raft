@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
-'''
+
+"""
 @File    :   group.py
-@Time    :   2022/03/19 14:45:02
+@Time    :   2023/05/20 18:11:10
 @Author  :   https://github.com/hangsz
 @Version :   0.1.0
 @Contact :   zhenhang.sun@gmail.com
-'''
+"""
+
 
 class Group(object):
     """
@@ -15,7 +17,6 @@ class Group(object):
 
     def __init__(self, meta: dict):
         """
-
         Args:
             meta (dict): group meta data
         """
@@ -23,7 +24,7 @@ class Group(object):
         self.meta = meta
 
     @property
-    def all_node_meta(self)-> list[dict]:
+    def all_node_meta(self) -> list[dict]:
         """return all nodes meta data in list
 
         Returns:

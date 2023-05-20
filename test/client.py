@@ -1,38 +1,34 @@
 #!/usr/bin/env python
 # coding: utf-8
-'''
+
+"""
 @File    :   client.py
 @Time    :   2022/03/19 15:35:31
 @Author  :   https://github.com/hangsz
 @Version :   0.1.0
 @Contact :   zhenhang.sun@gmail.com
-'''
+"""
 
-import logging
-import os
+
 import random
 import sys
 import time
 import traceback
 
-from raft.config import config
-from raft.rpc import Rpc
-
-logger = logging.getLogger(__name__)
+from raft import config, rpc
 
 
 def main() -> int:
-    env = os.environ.get("env")
-    conf = config[env] if env else config["DEV"]
+    conf = config.load_conf()
 
-    rpc_endpoint = Rpc((conf.ip, conf.cport))
+    rpc_endpoint = rpc.Endpoint((conf.IP, conf.CLIENT_PORT))
 
     data = {"type": "get_group"}
 
-    rpc_endpoint.send(data, (conf.ip, conf.mport))
+    rpc_endpoint.send(data, (conf.IP, conf.MASTER_PORT))
     try:
         data, _ = rpc_endpoint.recv()
-        group_meta = data['meta']
+        group_meta = data["meta"]
 
         print(group_meta)
     except Exception:
@@ -59,8 +55,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d]\n%(message)s",
-    )
     sys.exit(main())

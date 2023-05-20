@@ -8,21 +8,18 @@
 @Contact :   zhenhang.sun@gmail.com
 '''
 
-import os
-import sys
 import json
-import time
-import random
 import logging
+import os
+import random
+import sys
+import time
 import traceback
-from turtle import st
 
+from . import config, rpc
 from .log import Log
-from .rpc import Rpc
-from .config import config
 
 logger = logging.getLogger(__name__)
-logger.setLevel(level=logging.INFO)
 logger.propagate = False
 
 class Node(object):
@@ -42,14 +39,15 @@ class Node(object):
         self.addr = meta['addr']
         self.peers = meta['peers']
         
-        self.conf = self.load_conf()
-        self.path = self.conf.node_path
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
+        self.conf = config.load_conf()
+        self.path = self.conf.NODE_PATH
+       
+        os.makedirs(self.path, exist_ok=True)
 
         # persistent state
         self.current_term = 0
         self.voted_for = None
+        self.persistent_filename = os.path.join(self.path, self.group_id+'_'+self.id+'_persistent.json')
 
         # init persistent state
         self.load()
@@ -82,35 +80,31 @@ class Node(object):
         self.next_heartbeat_time = 0
 
         # rpc
-        self.rpc_endpoint = Rpc(self.addr, timeout=2)
+        self.rpc_endpoint = rpc.Endpoint(self.addr, timeout=2)
 
         # log
-        fmt = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s')
         handler = logging.FileHandler(os.path.join(self.path, self.group_id+'_'+self.id+'.log'), 'a')
+        fmt = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s')
         handler.setFormatter(fmt)
         logger.addHandler(handler)
     
-    @staticmethod
-    def load_conf():
-        env = os.environ.get("env")
-        conf = config[env] if env else config['DEV']
-        return conf
 
     def load(self):
-        filename = os.path.join(self.path, self.group_id+'_'+self.id+'_persistent.json')
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                persistent = json.load(f)
+        filename = self.persistent_filename
+
+        if not os.path.exists(filename):
+            self.save()
+        
+        with open(filename, 'r') as f:
+            persistent = json.load(f)
             self.current_term = persistent['current_term']
             self.voted_for = persistent['voted_for']
-        else:
-            self.save()
 
     def save(self):
         persistent = {'current_term': self.current_term,
                       'voted_for': self.voted_for}
 
-        filename = os.path.join(self.path, self.group_id+'_'+self.id+'_persistent.json')
+        filename = self.persistent_filename
         with open(filename, 'w') as f:
             json.dump(persistent, f, indent=4)
 
@@ -134,7 +128,7 @@ class Node(object):
                     self.rpc_endpoint.send(data, self.peers.get(self.leader_id))
                 return {}
             else:
-                self.client_addr = (addr[0], self.conf.cport)
+                self.client_addr = (addr[0], self.conf.CLIENT_PORT)
                 # logger.info("client addr " + self.client_addr[0] +'_' +str(self.client_addr[1]))
                 return data
         
@@ -476,6 +470,9 @@ class Node(object):
                 if self.role == 'leader':
                     self.leader_do(data)
             
+            except SystemExit:
+                sys.exit("sorry, something wrong")
+ 
             except KeyboardInterrupt:
                 self.rpc_endpoint.close()
                 sys.exit(0)

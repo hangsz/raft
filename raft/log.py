@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 # coding: utf-8
-'''
+
+"""
 @File    :   log.py
-@Time    :   2022/03/19 14:45:43
+@Time    :   2023/05/20 18:11:55
 @Author  :   https://github.com/hangsz
 @Version :   0.1.0
 @Contact :   zhenhang.sun@gmail.com
-'''
+"""
+
 
 import os
 import json
+
 
 class Log(object):
     def __init__(self, filename: str):
@@ -34,16 +37,16 @@ class Log(object):
     def last_log_term(self):
         return self.get_log_term(self.last_log_index)
 
-    def get_log_term(self, log_index: int) ->int:
+    def get_log_term(self, log_index: int) -> int:
         """
 
         Args:
-            log_index (int): 
+            log_index (int):
 
         Returns:
-            int: 
+            int:
         """
-    
+
         if log_index < 0 or log_index >= len(self.entries):
             return -1
         else:
@@ -56,9 +59,9 @@ class Log(object):
             next_index (int): next index
 
         Returns:
-            list[dict]: 
+            list[dict]:
         """
-        return self.entries[max(0, next_index):]
+        return self.entries[max(0, next_index) :]
 
     def delete_entries(self, prev_log_index: int):
         """delete entries
@@ -76,7 +79,7 @@ class Log(object):
 
         Args:
             prev_log_index (int): log index
-            entries (list[dict]): 
+            entries (list[dict]):
         """
         self.entries = self.entries[: max(0, prev_log_index + 1)] + entries
         self.save()

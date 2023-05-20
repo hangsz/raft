@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
-'''
+"""
 @File    :   slave.py
 @Time    :   2022/03/19 15:04:45
 @Author  :   https://github.com/hangsz
 @Version :   0.1.0
 @Contact :   zhenhang.sun@gmail.com
-'''
+"""
 
 import json
 import logging
@@ -16,11 +16,11 @@ import sys
 import traceback
 from multiprocessing import Process
 
-from .config import config
+from . import config, rpc
 from .node import Node
-from .rpc import Rpc
 
 logger = logging.getLogger(__name__)
+
 
 class Slave(object):
     """
@@ -28,16 +28,10 @@ class Slave(object):
     """
 
     def __init__(self):
-        self.conf = self.load_conf()
-        self.rpc_endpoint = Rpc((self.conf.ip, self.conf.sport))
-        
+        self.conf = config.load_conf()
+        self.rpc_endpoint = rpc.Endpoint((self.conf.IP, self.conf.SLAVE_PORT))
+
         self.childrens = {}
-    
-    @staticmethod
-    def load_conf():
-        env = os.environ.get("env")
-        conf = config[env] if env else config["DEV"]
-        return conf
 
     def create_node(self, meta: dict):
         """create and start a raft node
@@ -66,11 +60,12 @@ class Slave(object):
         Args:
             meta (dict): meta data
         """
-        self.path = self.conf.slave_path
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
+        self.path = self.conf.SLAVE_PATH
+        os.makedirs(self.path, exist_ok=True)
 
-        filename = os.path.join(self.path, meta["group_id"]+"_"+meta["id"]+".json")
+        filename = os.path.join(
+            self.path, meta["group_id"] + "_" + meta["id"] + ".json"
+        )
         with open(filename, "w") as f:
             json.dump(meta, f, indent=4)
 
@@ -79,34 +74,32 @@ class Slave(object):
         sys.exit(0)
 
     def run(self):
-        logger.info("slave begin running...")
-
         while True:
+            logger.info("slave is listening...")
             try:
-                data, addr = self.rpc_endpoint.recv()
+                data, _ = self.rpc_endpoint.recv()
+                logger.info(f"{data['type']}  start...")
 
                 if data["type"] == "create_node":
-                    logger.info("create node")
                     meta = data["meta"]
-                    logger.info(meta)
+                    logger.info(f"meta: {meta}")
                     self.save_node_meta(meta)
                     p = Process(target=self.create_node, args=(meta,), daemon=True)
                     p.start()
                     self.childrens[(meta["group_id"], meta["id"])] = p.pid
-
                 elif data["type"] == "stop_node":
-                    logger.info("stop node")
                     meta = data["meta"]
+                    logger.info(f"meta: {meta}")
                     self.stop_node(meta)
-
                 elif data["type"] == "stop_slave":
-                    logger.info("stop slave")
                     self.stop_slave()
             except KeyboardInterrupt:
                 self.rpc_endpoint.close()
                 sys.exit(0)
             except Exception:
                 logger.info(traceback.format_exc())
+            finally:
+                logger.info(f"{data['type']}  end.")
 
 
 def main() -> int:
@@ -115,10 +108,6 @@ def main() -> int:
 
     return 0
 
-if __name__ == "__main__":
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(funcName)s [line:%(lineno)d] %(message)s",
-        )
+if __name__ == "__main__":
     sys.exit(main())
