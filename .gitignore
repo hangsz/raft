@@ -2,3 +2,5 @@ __pycache__
 venv
 data
 .vscode
+dist
+build
