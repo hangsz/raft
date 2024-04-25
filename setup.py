@@ -18,7 +18,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=setuptools.find_packages(),
     install_requires=[
-        'pydantic==1.10.7',
+        'pydantic==1.10.13',
         'tomli==2.0.1',
         'typing_extensions==4.5.0'
     ]
